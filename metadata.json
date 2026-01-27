@@ -1,0 +1,5 @@
+{
+  "name": "Smart Knowledge Engine",
+  "description": "A high-performance knowledge retrieval system that uses local storage as a primary database and Gemini AI as an intelligent fallback mechanism for unstructured data.",
+  "requestFramePermissions": []
+}
