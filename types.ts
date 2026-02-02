@@ -3,14 +3,20 @@ export interface KnowledgeEntry {
   id: string;
   title: string;
   content: string;
+  extendedContent?: string;
+  imageUrl?: string;
+  imageUrls?: string[];
   source: 'database' | 'ai' | 'manual';
   createdAt: number;
 }
+
+export type UserRole = 'admin' | 'user';
 
 export interface User {
   id: string;
   username: string;
   email: string;
+  role: UserRole;
 }
 
 export interface HistoryItem {
@@ -27,7 +33,7 @@ export interface Bookmark {
   timestamp: number;
 }
 
-export type AppView = 'search' | 'add' | 'profile' | 'auth';
+export type AppView = 'search' | 'add' | 'profile' | 'auth' | 'admin';
 
 export interface SearchResult {
   entry: KnowledgeEntry | null;

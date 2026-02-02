@@ -5,6 +5,7 @@ import { SearchInterface } from './components/SearchInterface';
 import { AddContentForm } from './components/AddContentForm';
 import { AuthForm } from './components/AuthForm';
 import { ProfilePage } from './components/ProfilePage';
+import { AdminPanel } from './components/AdminPanel';
 import { Modal } from './components/Modal';
 import { AppView, User, KnowledgeEntry } from './types';
 import { storageService } from './services/storageService';
@@ -15,6 +16,7 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingQuery, setPendingQuery] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<KnowledgeEntry | null>(null);
+  const [editEntry, setEditEntry] = useState<KnowledgeEntry | null>(null);
 
   useEffect(() => {
     const sessionUser = storageService.getCurrentUser();
@@ -52,6 +54,12 @@ const App: React.FC = () => {
   const handleAddSuccess = () => {
     setView('search');
     setPendingQuery('');
+    setEditEntry(null);
+  };
+
+  const handleEditEntry = (entry: KnowledgeEntry) => {
+    setEditEntry(entry);
+    setView('add');
   };
 
   const renderContent = () => {
@@ -62,14 +70,19 @@ const App: React.FC = () => {
             user={user} 
             onNotFound={handleNotFound} 
             selectedEntry={selectedEntry} 
+            onEdit={handleEditEntry}
           />
         );
       case 'add':
         return (
           <AddContentForm 
             initialTitle={pendingQuery} 
+            editEntry={editEntry}
             onSuccess={handleAddSuccess}
-            onCancel={() => setView('search')}
+            onCancel={() => {
+              setView('search');
+              setEditEntry(null);
+            }}
           />
         );
       case 'auth':
@@ -77,6 +90,12 @@ const App: React.FC = () => {
       case 'profile':
         return user ? (
           <ProfilePage user={user} onSelectEntry={handleSelectEntryFromProfile} />
+        ) : (
+          <AuthForm onSuccess={handleAuthSuccess} />
+        );
+      case 'admin':
+        return user?.role === 'admin' ? (
+          <AdminPanel onEditEntry={handleEditEntry} />
         ) : (
           <AuthForm onSuccess={handleAuthSuccess} />
         );
@@ -91,6 +110,7 @@ const App: React.FC = () => {
       onViewChange={(v) => {
         setView(v);
         if (v !== 'search') setSelectedEntry(null);
+        if (v !== 'add') setEditEntry(null);
       }} 
       user={user}
       onLogout={handleLogout}
