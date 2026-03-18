@@ -15,7 +15,6 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingQuery, setPendingQuery] = useState('');
-  const [selectedEntry, setSelectedEntry] = useState<KnowledgeEntry | null>(null);
   const [editEntry, setEditEntry] = useState<KnowledgeEntry | null>(null);
 
   useEffect(() => {
@@ -46,11 +45,6 @@ const App: React.FC = () => {
     setView('search');
   };
 
-  const handleSelectEntryFromProfile = (entry: KnowledgeEntry) => {
-    setSelectedEntry(entry);
-    setView('search');
-  };
-
   const handleAddSuccess = () => {
     setView('search');
     setPendingQuery('');
@@ -69,8 +63,6 @@ const App: React.FC = () => {
           <SearchInterface 
             user={user} 
             onNotFound={handleNotFound} 
-            selectedEntry={selectedEntry} 
-            onEdit={handleEditEntry}
           />
         );
       case 'add':
@@ -89,7 +81,7 @@ const App: React.FC = () => {
         return <AuthForm onSuccess={handleAuthSuccess} />;
       case 'profile':
         return user ? (
-          <ProfilePage user={user} onSelectEntry={handleSelectEntryFromProfile} />
+          <ProfilePage user={user} onSelectEntry={(entry) => { setPendingQuery(entry.title); setView('search'); }} />
         ) : (
           <AuthForm onSuccess={handleAuthSuccess} />
         );
@@ -109,7 +101,6 @@ const App: React.FC = () => {
       currentView={view} 
       onViewChange={(v) => {
         setView(v);
-        if (v !== 'search') setSelectedEntry(null);
         if (v !== 'add') setEditEntry(null);
       }} 
       user={user}
