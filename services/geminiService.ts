@@ -1,92 +1,76 @@
+import { GoogleGenAI } from '@google/genai';
+import { SearchResponse, SearchResult } from '../types';
 
-import { GoogleGenAI } from "@google/genai";
+const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+const searchEngineId = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID;
+
+const missingConfigMessage = 'Missing API configuration. Add VITE_GEMINI_API_KEY, VITE_GOOGLE_API_KEY, and VITE_GOOGLE_SEARCH_ENGINE_ID to your environment.';
+
+const ensureConfig = () => {
+  if (!geminiApiKey || !googleApiKey || !searchEngineId) {
+    throw new Error(missingConfigMessage);
+  }
+};
+
+const toSearchResults = (items: any[] = []): SearchResult[] => {
+  return items.slice(0, 5).map((item) => ({
+    title: item.title ?? 'Untitled result',
+    link: item.link ?? '#',
+    snippet: item.snippet ?? 'No snippet available.',
+    displayLink: item.displayLink ?? new URL(item.link).hostname,
+  }));
+};
+
+const formatSourcesForPrompt = (sources: SearchResult[]) => sources
+  .map((source, index) => `${index + 1}. ${source.title}\nURL: ${source.link}\nSnippet: ${source.snippet}`)
+  .join('\n\n');
 
 export const geminiService = {
-  generateDetailedContent: async (query: string): Promise<string | null> => {
-    try {
-      // Fix: Follow guidelines by using process.env.API_KEY directly for initialization
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Generate an elaborated, highly detailed professional briefing for the topic: "${query}". 
-        Include the following structure in plain text:
-        1. Comprehensive Overview (A detailed introduction)
-        2. Core Concepts & Mechanics (How it works in depth)
-        3. Historical significance or Evolution
-        4. Practical Modern Applications and Impact.
-        
-        Aim for approximately 400-500 words of sophisticated content. Do not use markdown headers, just clear spacing between sections.`,
-        config: {
-          temperature: 0.8,
-          thinkingConfig: { thinkingBudget: 2000 }
-        }
-      });
+  async searchWeb(query: string): Promise<SearchResponse> {
+    ensureConfig();
 
-      return response.text?.trim() || null;
-    } catch (error) {
-      console.error('Gemini Text Error:', error);
-      return null;
+    const searchUrl = new URL('https://www.googleapis.com/customsearch/v1');
+    searchUrl.searchParams.set('key', googleApiKey);
+    searchUrl.searchParams.set('cx', searchEngineId);
+    searchUrl.searchParams.set('q', query);
+    searchUrl.searchParams.set('num', '5');
+    searchUrl.searchParams.set('safe', 'active');
+
+    const searchResponse = await fetch(searchUrl.toString());
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text();
+      throw new Error(`Google Search request failed: ${searchResponse.status} ${errorText}`);
     }
-  },
 
-  generateExtendedAnalysis: async (query: string): Promise<string | null> => {
-    try {
-      // Fix: Follow guidelines by using process.env.API_KEY directly for initialization
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Provide an advanced "Extended Deep-Dive" into "${query}". 
-        Focus on:
-        - Technical nuances and specialized theories.
-        - Future projections and emerging trends (2025-2030).
-        - Critical controversies or challenges.
-        - Comparative analysis with similar concepts.
-        
-        Provide another 600 words of high-level academic-style text.`,
-        config: {
-          temperature: 0.9,
-          thinkingConfig: { thinkingBudget: 3000 }
-        }
-      });
+    const searchData = await searchResponse.json();
+    const sources = toSearchResults(searchData.items);
 
-      return response.text?.trim() || null;
-    } catch (error) {
-      console.error('Gemini Extended Text Error:', error);
-      return null;
-    }
-  },
-
-  generateContextualImage: async (query: string, variant: string = "primary"): Promise<string | null> => {
-    try {
-      // Fix: Follow guidelines by using process.env.API_KEY directly for initialization
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const promptMap: Record<string, string> = {
-        primary: `A cinematic, high-quality, professional conceptual visual representing "${query}". Minimalistic, futuristic.`,
-        detail: `A high-tech detailed macro shot or schematic diagram related to "${query}". Professional lighting.`,
-        context: `An wide-angle environmental shot showing the impact or context of "${query}" in a modern world.`,
+    if (sources.length === 0) {
+      return {
+        answer: 'No matching web results were returned. Try a more specific query or update the search engine configuration.',
+        followUpIdeas: ['Refine the wording', 'Search for a named source', 'Try a broader topic'],
+        sources: [],
       };
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [{ text: `${promptMap[variant] || promptMap.primary} No text in the image.` }]
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: "16:9"
-          }
-        }
-      });
-
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Gemini Image Error:', error);
-      return null;
     }
-  }
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const summaryResponse = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are preparing a concise research brief for the user query: "${query}". Use only the sources below.\n\nSources:\n${formatSourcesForPrompt(sources)}\n\nReturn valid JSON with this exact shape:\n{\n  "answer": "2-3 short paragraphs summarizing the result and mentioning important caveats.",\n  "followUpIdeas": ["idea 1", "idea 2", "idea 3"]\n}\n\nRules:\n- Do not invent facts beyond the supplied sources.\n- Keep the answer under 220 words.\n- Keep followUpIdeas to exactly 3 items.`,
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.3,
+      },
+    });
+
+    const parsed = JSON.parse(summaryResponse.text || '{}');
+
+    return {
+      answer: parsed.answer || 'Unable to summarize the search results.',
+      followUpIdeas: Array.isArray(parsed.followUpIdeas) ? parsed.followUpIdeas.slice(0, 3) : [],
+      sources,
+    };
+  },
+  missingConfigMessage,
 };

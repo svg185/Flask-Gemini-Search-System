@@ -1,4 +1,3 @@
-
 export interface KnowledgeEntry {
   id: string;
   title: string;
@@ -36,7 +35,14 @@ export interface Bookmark {
 export type AppView = 'search' | 'add' | 'profile' | 'auth' | 'admin';
 
 export interface SearchResult {
-  entry: KnowledgeEntry | null;
-  isAI: boolean;
-  query: string;
+  title: string;
+  link: string;
+  snippet: string;
+  displayLink: string;
+}
+
+export interface SearchResponse {
+  answer: string;
+  followUpIdeas: string[];
+  sources: SearchResult[];
 }
